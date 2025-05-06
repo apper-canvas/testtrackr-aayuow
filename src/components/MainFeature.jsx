@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 import getIcon from '../utils/iconUtils';
+import { captureScreenshot } from '../utils/screenshotUtils';
 
 function MainFeature() {
   // Define icon components
@@ -14,6 +15,8 @@ function MainFeature() {
   const AlertCircleIcon = getIcon('AlertCircle');
   const InfoIcon = getIcon('Info');
   const ChevronDownIcon = getIcon('ChevronDown');
+  const CameraIcon = getIcon('Camera');
+  const XIcon = getIcon('X');
   const ChevronUpIcon = getIcon('ChevronUp');
 
   // Initialize form state
@@ -24,7 +27,7 @@ function MainFeature() {
     prerequisites: '',
     tags: [],
     steps: [
-      { id: 1, description: '', expectedResult: '' }
+      { id: 1, description: '', expectedResult: '', screenshot: null }
     ]
   });
 
@@ -34,6 +37,7 @@ function MainFeature() {
   const [showPreview, setShowPreview] = useState(false);
   const [currentTag, setCurrentTag] = useState('');
   const [expandedSteps, setExpandedSteps] = useState([]);
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
 
   // Handle text input changes
   const handleInputChange = (e) => {
@@ -82,6 +86,36 @@ function MainFeature() {
       });
     }
   };
+  // Handle screenshot capture for a step
+  const handleScreenshotCapture = async (stepId) => {
+    setIsCapturingScreenshot(true);
+    
+    try {
+      const screenshot = await captureScreenshot();
+      
+      if (screenshot && screenshot.error) {
+        toast.error(screenshot.error, {
+          position: "bottom-right",
+          autoClose: 4000
+        });
+        setIsCapturingScreenshot(false);
+        return;
+      }
+      
+      const updatedSteps = testCaseForm.steps.map(step => 
+        step.id === stepId ? { ...step, screenshot } : step
+      );
+      
+      setTestCaseForm({ ...testCaseForm, steps: updatedSteps });
+      toast.success("Screenshot captured successfully!", {
+        position: "bottom-right",
+        autoClose: 2000
+      });
+    } finally {
+      setIsCapturingScreenshot(false);
+    }
+  };
+
 
   // Add a new test step
   const addStep = () => {
@@ -93,7 +127,7 @@ function MainFeature() {
       ...testCaseForm,
       steps: [
         ...testCaseForm.steps,
-        { id: newId, description: '', expectedResult: '' }
+        { id: newId, description: '', expectedResult: '', screenshot: null }
       ]
     });
     
@@ -144,6 +178,30 @@ function MainFeature() {
       autoClose: 2000
     });
   };
+  // Remove a screenshot from a step
+  const removeScreenshot = (stepId) => {
+    const updatedSteps = testCaseForm.steps.map(step => 
+      step.id === stepId ? { ...step, screenshot: null } : step
+    );
+    
+    setTestCaseForm({
+      ...testCaseForm,
+      steps: updatedSteps
+    });
+    
+    toast.info("Screenshot removed", {
+      position: "bottom-right",
+      autoClose: 2000
+    });
+  };
+
+  // Handle opening screenshot in a new tab
+  const openScreenshotInNewTab = (screenshot) => {
+    const newWindow = window.open();
+    newWindow.document.write(`<img src="${screenshot}" alt="Screenshot" style="max-width: 100%; height: auto;" />`);
+    newWindow.document.title = "Test Step Screenshot";
+  };
+
 
   // Handle tag input
   const handleTagInputChange = (e) => {
@@ -264,7 +322,7 @@ function MainFeature() {
           prerequisites: '',
           tags: [],
           steps: [
-            { id: 1, description: '', expectedResult: '' }
+            { id: 1, description: '', expectedResult: '', screenshot: null }
           ]
         });
         setShowPreview(false);
@@ -361,6 +419,192 @@ function MainFeature() {
             {testCaseForm.prerequisites && (
               <div className="space-y-2">
                 <h4 className="text-sm font-medium text-surface-600 dark:text-surface-400">Prerequisites</h4>
+                        {index + 1}
+                      </div>
+                      <div className="space-y-3 w-full">
+                        <div>
+                          <h5 className="text-sm font-medium text-surface-700 dark:text-surface-300">Step Description</h5>
+                          <p className="mt-1 text-surface-800 dark:text-surface-200">{step.description}</p>
+                        </div>
+                        <div>
+                          <h5 className="text-sm font-medium text-surface-700 dark:text-surface-300">Expected Result</h5>
+                          <p className="mt-1 text-surface-800 dark:text-surface-200">{step.expectedResult}</p>
+                        </div>
+                        {step.screenshot && (
+                          <div>
+                            <h5 className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">Screenshot</h5>
+                            <img 
+                              src={step.screenshot} 
+                              alt={`Screenshot for step ${index + 1}`}
+                              className="rounded-md border border-surface-200 dark:border-surface-600 max-h-64 cursor-pointer"
+                              onClick={() => openScreenshotInNewTab(step.screenshot)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* Edit Mode */
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="title" className="label">
+                    Test Case Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    value={testCaseForm.title}
+                    onChange={handleInputChange}
+                    placeholder="Enter a descriptive title"
+                    className={`input ${errors.title ? 'input-error' : ''}`}
+                    autoFocus
+                  />
+                  {errors.title && (
+                    <p className="mt-1 text-sm text-red-500 flex items-center">
+                      <AlertCircleIcon className="w-4 h-4 mr-1" />
+                      {errors.title}
+                    </p>
+                  )}
+                </div>
+                
+                <div>
+                  <label htmlFor="description" className="label">Description</label>
+                  <textarea
+                    id="description"
+                    name="description"
+                    value={testCaseForm.description}
+                    onChange={handleInputChange}
+                    placeholder="Provide additional context for this test case"
+                    rows="3"
+                    className={`input resize-none ${errors.description ? 'input-error' : ''}`}
+                  ></textarea>
+                  {errors.description && (
+                    <p className="mt-1 text-sm text-red-500 flex items-center">
+                      <AlertCircleIcon className="w-4 h-4 mr-1" />
+                      {errors.description}
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-surface-500 dark:text-surface-400 flex items-center">
+                    <InfoIcon className="w-3 h-3 mr-1" />
+                    Maximum 500 characters
+                  </p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="priority" className="label">Priority</label>
+                  <select
+                    id="priority"
+                    name="priority"
+                    value={testCaseForm.priority}
+                    onChange={handleInputChange}
+                    className="select"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label htmlFor="prerequisites" className="label">Prerequisites</label>
+                  <textarea
+                    id="prerequisites"
+                    name="prerequisites"
+                    value={testCaseForm.prerequisites}
+                    onChange={handleInputChange}
+                    placeholder="Required conditions before running this test"
+                    rows="3"
+                    className="input resize-none"
+                  ></textarea>
+                </div>
+                
+                <div>
+                  <label htmlFor="tags" className="label">Tags</label>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {testCaseForm.tags.map(tag => (
+                      <span 
+                        key={tag} 
+                        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-light bg-opacity-20 text-primary-dark dark:bg-opacity-30 dark:text-primary-light"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(tag)}
+                          className="ml-1.5 text-primary-dark dark:text-primary-light hover:text-red-500 dark:hover:text-red-400 focus:outline-none"
+                        >
+                          <XCircleIcon className="w-4 h-4" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex">
+                    <input
+                      type="text"
+                      id="tags"
+                      value={currentTag}
+                      onChange={handleTagInputChange}
+                      placeholder="Add a tag"
+                      className="input rounded-r-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={addTag}
+                      className="px-3 bg-primary text-white rounded-r-md hover:bg-primary-dark transition-colors"
+                    >
+                      <PlusIcon className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-surface-500 dark:text-surface-400">
+                    Press the + button to add a tag (maximum 5)
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="pt-4 border-t border-surface-200 dark:border-surface-700">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-surface-800 dark:text-white flex items-center">
+                  Test Steps
+                  <span className="ml-2 text-xs bg-primary-light text-primary-dark dark:bg-primary-dark dark:text-primary-light py-0.5 px-2 rounded-full">
+                    {testCaseForm.steps.length} {testCaseForm.steps.length === 1 ? 'step' : 'steps'}
+                  </span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={addStep}
+                  className="flex items-center text-sm px-3 py-1.5 bg-primary-light bg-opacity-10 hover:bg-opacity-20 text-primary dark:bg-primary-dark dark:bg-opacity-20 dark:hover:bg-opacity-30 dark:text-primary-light rounded-md transition-colors"
+                >
+                  <PlusCircleIcon className="w-4 h-4 mr-1.5" />
+                  Add Step
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <AnimatePresence>
+                  {testCaseForm.steps.map((step, index) => (
+                    <motion.div
+                      key={step.id}
+                      id={`step-${step.id}`}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700 overflow-hidden"
+                    >
+                      <div className="p-3 bg-white dark:bg-surface-700 border-b border-surface-200 dark:border-surface-600 flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-light h-6 w-6 rounded-full flex items-center justify-center text-sm font-medium mr-3">
                 <p className="text-surface-800 dark:text-surface-200 whitespace-pre-line">{testCaseForm.prerequisites}</p>
               </div>
             )}
@@ -623,6 +867,41 @@ function MainFeature() {
                                 {errors.steps[step.id].expectedResult}
                               </p>
                             )}
+                          
+                          <div className="mt-4">
+                            <div className="flex justify-between items-center mb-2">
+                              <label className="label mb-0">Screenshot</label>
+                              <button
+                                type="button"
+                                onClick={() => handleScreenshotCapture(step.id)}
+                                disabled={isCapturingScreenshot}
+                                className={`flex items-center space-x-1 text-xs px-2 py-1 rounded bg-surface-100 dark:bg-surface-700 hover:bg-surface-200 dark:hover:bg-surface-600 text-surface-700 dark:text-surface-300 transition-colors ${
+                                  isCapturingScreenshot ? 'opacity-70 cursor-not-allowed' : ''
+                                }`}
+                              >
+                                <CameraIcon className="w-3.5 h-3.5" />
+                                <span>{isCapturingScreenshot ? 'Capturing...' : 'Capture'}</span>
+                              </button>
+                            </div>
+                            
+                            {step.screenshot && (
+                              <div className="relative mt-2 border border-surface-200 dark:border-surface-600 rounded-md p-1 bg-white dark:bg-surface-800">
+                                <img 
+                                  src={step.screenshot} 
+                                  alt={`Screenshot for step ${index + 1}`}
+                                  className="w-full rounded h-auto max-h-48 object-contain"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeScreenshot(step.id)}
+                                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors"
+                                  title="Remove screenshot"
+                                >
+                                  <XIcon className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                           </div>
                         </div>
                       )}
